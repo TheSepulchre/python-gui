@@ -28,7 +28,9 @@ class DataWidget(QWidget):
         # Header
         header_layout = QHBoxLayout()
         title_label = QLabel(f"🧭 {title}")
-        title_label.setStyleSheet("font-size: 20px; font-weight: bold; color: white;")
+        title_label.setStyleSheet("font-size: 20px; font-weight: bold; color: black; background-color: #EAEAEA;")
+
+         # Refresh button
         self.refresh_btn = QPushButton("⟳ Refresh")
         self.refresh_btn.setFixedWidth(100)
         self.refresh_btn.setStyleSheet("""
@@ -51,13 +53,13 @@ class DataWidget(QWidget):
         self.table = QTableWidget()
         self.table.setStyleSheet("""
             QTableWidget {
-                background-color: #1f1f1f;
+                background-color: #EAEAEA;
                 color: white;
                 border: 1px solid #333;
                 gridline-color: #333;
             }
             QHeaderView::section {
-                background-color: #2b2b2b;
+                background-color: #EAEAEA;
                 color: #ddd;
                 padding: 4px;
             }
@@ -108,7 +110,7 @@ class Dashboard(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Data Dashboard")
-        self.setStyleSheet("background-color: #121212; color: white;")
+        self.setStyleSheet("background-color: #EAEAEA; color: black;")
         self.resize(1200, 800)
 
         layout = QVBoxLayout(self)
@@ -131,27 +133,29 @@ class TitleBar(QFrame):
         self.setFixedHeight(40)
         self.setStyleSheet("""
             QFrame {
-                background-color: #181818;
-                border-bottom: 1px solid #333;
+            background-color: #07203A; /* dark blue */
+            border-bottom: 1px solid #021826;
             }
             QLabel {
-                color: white;
-                font-size: 16px;
-                padding-left: 10px;
+            color: white;
+            font-size: 16px;
+            padding-left: 10px;
             }
             QPushButton {
-                background-color: transparent;
-                color: white;
-                border: none;
-                font-size: 16px;
-                width: 40px;
-                height: 30px;
+            background-color: transparent;
+            color: white;
+            border: none;
+            font-size: 16px;
+            width: 40px;
+            height: 30px;
             }
             QPushButton:hover {
-                background-color: #2d2d2d;
+            background-color: #1E5FB8; /* lighter blue on hover */
+            color: white;
+            border-radius: 6px;
             }
             QPushButton#close:hover {
-                background-color: #b00020;
+            background-color: #1E5FB8;
             }
         """)
 
@@ -237,8 +241,8 @@ class ModernWindow(QMainWindow):
 
         # Dark theme
         palette = QPalette()
-        palette.setColor(QPalette.Window, QColor("#121212"))
-        palette.setColor(QPalette.WindowText, Qt.white)
+        palette.setColor(QPalette.Window, QColor("#EAEAEA"))
+        palette.setColor(QPalette.WindowText, Qt.black)
         self.setPalette(palette)
 
         # Main layout
@@ -262,7 +266,7 @@ class ModernWindow(QMainWindow):
         nav.setFixedWidth(220)
         nav.setStyleSheet("""
             QFrame {
-                background-color: #1f1f1f;
+                background-color: #07203A; /* dark blue */
                 border-top-right-radius: 20px;
                 border-bottom-right-radius: 20px;
             }
@@ -274,7 +278,7 @@ class ModernWindow(QMainWindow):
                 font-size: 16px;
             }
             QPushButton:hover {
-                background-color: #2d2d2d;
+                background-color: #1E5FB8;
             }
         """)
 
@@ -325,13 +329,14 @@ class ModernWindow(QMainWindow):
         layout.setAlignment(Qt.AlignCenter)
 
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-size: 32px; font-weight: bold; color: white;")
+        title_lbl.setStyleSheet("font-size: 32px; font-weight: bold; color: black;")
         text_lbl = QLabel(text)
-        text_lbl.setStyleSheet("font-size: 18px; color: #bbbbbb;")
+        text_lbl.setStyleSheet("font-size: 18px; color: black;")
         text_lbl.setWordWrap(True)
 
         layout.addWidget(title_lbl)
-        layout.addWidget(mySql)
+        if title == "Production":
+            layout.addWidget(mySql)
         layout.addWidget(text_lbl)
         return page
 
