@@ -3,7 +3,9 @@ import sys
 # "from PySide6.QtWidgets import QApplication" unchanged while getting a light
 # modern theme with blue accents applied automatically.
 import PySide6.QtWidgets as _qtwidgets
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtGui import QColor, QPalette, QIcon
+
+
 
 # Theme palette/colors
 _THEME = {
@@ -136,6 +138,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QStackedWidget, QFrame, QTableWidget, QTableWidgetItem, QMessageBox
 )
+
 class DataTable(QWidget):
     """
     A single table widget that can run any SQL query
@@ -332,7 +335,7 @@ class ModernWindow(QMainWindow):
         # --- Pages ---
         self.stack = AnimatedStack()
         home = self.make_page("Home", "Welcome to your full-screen modern Python app!")
-        production = self.make_page("Production", "Production data and analytics will be shown here.")
+        production = self.make_page("Production", "Production data and metrics overview.")
         logistics = self.make_page("Logistics", "Logistics management and tracking information.")
         settings = self.make_page("Settings", "You can customize preferences here.")
 
@@ -367,7 +370,7 @@ class ModernWindow(QMainWindow):
         layout.addWidget(title_lbl)
         if title == "Production":
             # Each table is a unique instance with its own query
-            self.data_table = DataTable("Database Browser")
+            self.data_table = DataTable("Production Data Viewer")
             layout.addWidget(self.data_table)
         layout.addWidget(text_lbl)
         return page
@@ -375,6 +378,7 @@ class ModernWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon("assets/icon.ico"))
     window = ModernWindow()
     window.show()
     sys.exit(app.exec())
