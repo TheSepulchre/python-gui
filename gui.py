@@ -1,93 +1,195 @@
 import sys
+# Inject a themed QApplication subclass so the rest of the module can keep using
+# "from PySide6.QtWidgets import QApplication" unchanged while getting a light
+# modern theme with blue accents applied automatically.
+import PySide6.QtWidgets as _qtwidgets
+from PySide6.QtGui import QColor, QPalette
+
+# Theme palette/colors
+_THEME = {
+    "bg": "#F4F8FF",         # main window background (very light)
+    "panel": "#FFFFFF",      # cards / panels
+    "text": "#0B2545",       # primary text (dark blue)
+    "muted": "#546E86",      # secondary text
+    "accent": "#1E5FB8",     # blue accent
+    "border": "#E6EEF8",     # subtle borders
+    "table_alt": "#F8FBFF",  # table alternate row
+}
+
+# Global stylesheet (light, modern, blue accents)
+_GLOBAL_STYLESHEET = f"""
+QMainWindow {{
+    background-color: {_THEME["bg"]};
+}}
+
+QFrame#titlebar, QFrame {{
+    background-color: {_THEME["panel"]};
+    color: {_THEME["text"]};
+}}
+
+QLabel {{
+    color: {_THEME["text"]};
+}}
+
+QPushButton {{
+    background-color: transparent;
+    color: {_THEME["text"]};
+    border: 1px solid transparent;
+    padding: 8px 10px;
+    border-radius: 8px;
+}}
+QPushButton:hover {{
+    background-color: rgba(30,95,184,0.08);
+    border-color: {_THEME["border"]};
+}}
+QPushButton:pressed {{
+    background-color: rgba(30,95,184,0.14);
+}}
+
+# Sidebar styling (applies to nav QFrame and its buttons)
+QFrame {{
+    /* default frame rules */
+}}
+QFrame[sidebar="true"] {{
+    background-color: {_THEME["panel"]};
+    border-right: 1px solid {_THEME["border"]};
+}}
+QFrame[sidebar="true"] QPushButton {{
+    text-align: left;
+    padding: 12px 18px;
+    color: {_THEME["text"]};
+    font-weight: 500;
+}}
+QFrame[sidebar="true"] QPushButton:hover {{
+    background-color: rgba(30,95,184,0.08);
+    color: {_THEME["accent"]};
+}}
+
+QTableWidget {{
+    background-color: {_THEME["panel"]};
+    color: {_THEME["text"]};
+    gridline-color: {_THEME["border"]};
+    selection-background-color: {_THEME["accent"]};
+    selection-color: white;
+}}
+QHeaderView::section {{
+    background-color: {_THEME["bg"]};
+    color: {_THEME["muted"]};
+    padding: 6px;
+    border: 1px solid {_THEME["border"]};
+}}
+
+QStackedWidget {{
+    background-color: transparent;
+}}
+
+QScrollBar:vertical, QScrollBar:horizontal {{
+    background: transparent;
+    width: 10px;
+    height: 10px;
+}}
+QScrollBar::handle {{
+    background: {_THEME["border"]};
+    border-radius: 6px;
+}}
+QScrollBar::handle:hover {{
+    background: {_THEME["muted"]};
+}}
+"""
+
+class ThemedApplication(_qtwidgets.QApplication):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Prefer Fusion for consistent rendering across platforms
+        try:
+            self.setStyle("Fusion")
+        except Exception:
+            pass
+
+        # Set a light QPalette that matches the stylesheet
+        palette = QPalette()
+        palette.setColor(QPalette.Window, QColor(_THEME["bg"]))
+        palette.setColor(QPalette.WindowText, QColor(_THEME["text"]))
+        palette.setColor(QPalette.Base, QColor(_THEME["panel"]))
+        palette.setColor(QPalette.AlternateBase, QColor(_THEME["table_alt"]))
+        palette.setColor(QPalette.ToolTipBase, QColor(_THEME["panel"]))
+        palette.setColor(QPalette.ToolTipText, QColor(_THEME["text"]))
+        palette.setColor(QPalette.Text, QColor(_THEME["text"]))
+        palette.setColor(QPalette.Button, QColor(_THEME["panel"]))
+        palette.setColor(QPalette.ButtonText, QColor(_THEME["text"]))
+        palette.setColor(QPalette.BrightText, QColor("#ffffff"))
+        palette.setColor(QPalette.Highlight, QColor(_THEME["accent"]))
+        palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
+        self.setPalette(palette)
+
+        # Apply global stylesheet
+        self.setStyleSheet(_GLOBAL_STYLESHEET)
+
+
+# Replace QApplication in PySide6.QtWidgets module so downstream "from ... import QApplication"
+# picks up ThemedApplication automatically.
+_qtwidgets.QApplication = ThemedApplication
 import requests
-from PySide6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, QRect
+from PySide6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, QRect, QTimer
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QStackedWidget, QFrame, QTableWidget, QTableWidgetItem, QMessageBox
 )
-
-
-class DataWidget(QWidget):
+class DataTable(QWidget):
     """
-    A reusable widget that queries data from your Node bridge
-    and displays it in a table.
+    A single table widget that can run any SQL query
+    on-demand when a button is pressed.
     """
-    def __init__(self, title: str, query: str, endpoint="http://localhost:4000/query", refresh_secs=0):
+    def __init__(self, title="Data Viewer", endpoint="http://localhost:3000/query"):
         super().__init__()
-        self.title = title
-        self.query = query
         self.endpoint = endpoint
-        self.refresh_secs = refresh_secs
 
-        # --- Layout ---
+        # --- Layout setup ---
         layout = QVBoxLayout(self)
         layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
-        # Header
-        header_layout = QHBoxLayout()
-        title_label = QLabel(f"🧭 {title}")
-        title_label.setStyleSheet("font-size: 20px; font-weight: bold; color: black; background-color: #EAEAEA;")
-
-         # Refresh button
-        self.refresh_btn = QPushButton("⟳ Refresh")
-        self.refresh_btn.setFixedWidth(100)
-        self.refresh_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2d2d2d;
-                color: white;
-                border-radius: 8px;
-                padding: 6px;
-            }
-            QPushButton:hover { background-color: #444; }
-        """)
-        self.refresh_btn.clicked.connect(self.refresh_data)
-
-        header_layout.addWidget(title_label)
-        header_layout.addStretch()
-        header_layout.addWidget(self.refresh_btn)
-        layout.addLayout(header_layout)
+        # Title
+        title_label = QLabel(title)
+        layout.addWidget(title_label)
 
         # Table
         self.table = QTableWidget()
-        self.table.setStyleSheet("""
-            QTableWidget {
-                background-color: #EAEAEA;
-                color: white;
-                border: 1px solid #333;
-                gridline-color: #333;
-            }
-            QHeaderView::section {
-                background-color: #EAEAEA;
-                color: #ddd;
-                padding: 4px;
-            }
-        """)
         layout.addWidget(self.table)
 
-        # Optional auto-refresh
-        if refresh_secs > 0:
-            self.timer = QTimer(self)
-            self.timer.timeout.connect(self.refresh_data)
-            self.timer.start(refresh_secs * 1000)
+        # Buttons row
+        button_layout = QHBoxLayout()
+        layout.addLayout(button_layout)
 
-        self.refresh_data()
+        # Add buttons with predefined queries
+        self.buttons = {
+            "Drumming": "SELECT TOP 10 * FROM dbo.batches",
+            "Ewald": "SELECT TOP 10 * FROM dbo.ewald",
+            "Convo": "SELECT TOP 10 * FROM dbo.convo",
+            "Mixing": "SELECT TOP 10 * FROM dbo.Mixing",
+        }
 
-    def refresh_data(self):
+        for label, query in self.buttons.items():
+            btn = QPushButton(label)
+            btn.clicked.connect(lambda checked, q=query: self.run_query(q))
+            button_layout.addWidget(btn)
+
+        button_layout.addStretch()
+
+    def run_query(self, query: str):
         """Fetch data from the Node.js bridge and populate the table."""
         try:
-            res = requests.post(self.endpoint, json={"query": self.query})
+            res = requests.post(self.endpoint, json={"query": query})
             res.raise_for_status()
             data = res.json()
 
             if not data:
                 self.table.setRowCount(0)
                 self.table.setColumnCount(1)
-                self.table.setHorizontalHeaderLabels(["No data returned"])
+                self.table.setHorizontalHeaderLabels(["No data"])
                 return
 
-            # Fill the table
             columns = list(data[0].keys())
             self.table.setColumnCount(len(columns))
             self.table.setRowCount(len(data))
@@ -103,61 +205,12 @@ class DataWidget(QWidget):
             print(f"[Error] {e}")
 
 
-class Dashboard(QWidget):
-    """
-    Example dashboard that uses multiple DataWidget instances.
-    """
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Data Dashboard")
-        self.setStyleSheet("background-color: #EAEAEA; color: black;")
-        self.resize(1200, 800)
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-
-        # Example widgets (change queries as needed)
-        widget1 = DataWidget("Drumming", "SELECT TOP 10 * FROM dbo.batches")
-        widget2 = DataWidget("Ewald", "SELECT TOP 10 * FROM dbo.ewald")
-        widget3 = DataWidget("Convo", "SELECT TOP 10 * FROM dbo.convo")
-
-        layout.addWidget(widget1)
-        layout.addWidget(widget2)
-        layout.addWidget(widget3)
-
 class TitleBar(QFrame):
     """Custom draggable title bar with buttons."""
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
         self.setFixedHeight(40)
-        self.setStyleSheet("""
-            QFrame {
-            background-color: #07203A; /* dark blue */
-            border-bottom: 1px solid #021826;
-            }
-            QLabel {
-            color: white;
-            font-size: 16px;
-            padding-left: 10px;
-            }
-            QPushButton {
-            background-color: transparent;
-            color: white;
-            border: none;
-            font-size: 16px;
-            width: 40px;
-            height: 30px;
-            }
-            QPushButton:hover {
-            background-color: #1E5FB8; /* lighter blue on hover */
-            color: white;
-            border-radius: 6px;
-            }
-            QPushButton#close:hover {
-            background-color: #1E5FB8;
-            }
-        """)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 0, 0, 0)
@@ -168,16 +221,13 @@ class TitleBar(QFrame):
         layout.addStretch()
 
         self.btn_min = QPushButton("–")
-        # self.btn_max = QPushButton("□")
         self.btn_close = QPushButton("×")
         self.btn_close.setObjectName("close")
 
         layout.addWidget(self.btn_min)
-        # layout.addWidget(self.btn_max)
         layout.addWidget(self.btn_close)
 
         self.btn_min.clicked.connect(lambda: parent.showMinimized())
-        # self.btn_max.clicked.connect(self.toggle_max_restore)
         self.btn_close.clicked.connect(lambda: parent.close())
 
         self.start_pos = QPoint()
@@ -240,10 +290,10 @@ class ModernWindow(QMainWindow):
         self.showMaximized()
 
         # Dark theme
-        palette = QPalette()
-        palette.setColor(QPalette.Window, QColor("#EAEAEA"))
-        palette.setColor(QPalette.WindowText, Qt.black)
-        self.setPalette(palette)
+        #palette = QPalette()
+        #palette.setColor(QPalette.Window, QColor("#EAEAEA"))
+        #palette.setColor(QPalette.WindowText, Qt.black)
+        #self.setPalette(palette)
 
         # Main layout
         container = QWidget()
@@ -264,23 +314,6 @@ class ModernWindow(QMainWindow):
         # Sidebar navigation
         nav = QFrame()
         nav.setFixedWidth(220)
-        nav.setStyleSheet("""
-            QFrame {
-                background-color: #07203A; /* dark blue */
-                border-top-right-radius: 20px;
-                border-bottom-right-radius: 20px;
-            }
-            QPushButton {
-                color: white;
-                border: none;
-                text-align: left;
-                padding: 15px 20px;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: #1E5FB8;
-            }
-        """)
 
         nav_layout = QVBoxLayout(nav)
         nav_layout.setContentsMargins(0, 40, 0, 0)
@@ -323,20 +356,19 @@ class ModernWindow(QMainWindow):
 
     def make_page(self, title, text):
         """Creates a simple content page."""
-        mySql = Dashboard()
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setAlignment(Qt.AlignCenter)
 
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-size: 32px; font-weight: bold; color: black;")
         text_lbl = QLabel(text)
-        text_lbl.setStyleSheet("font-size: 18px; color: black;")
         text_lbl.setWordWrap(True)
 
         layout.addWidget(title_lbl)
         if title == "Production":
-            layout.addWidget(mySql)
+            # Each table is a unique instance with its own query
+            self.data_table = DataTable("Database Browser")
+            layout.addWidget(self.data_table)
         layout.addWidget(text_lbl)
         return page
 
